@@ -1,0 +1,57 @@
+:root{--blue:#1b5db5;--ink:#1c2430;--mut:#6b7686;--bg:#f4f7fb;--line:#dde4ee;--red:#c0392b;--r:12px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 Pretendard,"Noto Sans KR","Apple SD Gothic Neo",system-ui,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:0 16px}
+.top{background:var(--blue);color:#fff;padding:28px 0 20px}
+.top h1{margin:0 0 4px;font-size:28px}
+.top p{margin:0 0 14px;opacity:.85}
+.steps{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+.steps li{background:rgba(255,255,255,.15);border-radius:99px;padding:4px 12px;font-size:13px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:20px;margin:16px 0}
+.card h2{margin:0 0 12px;font-size:19px}
+.muted{color:var(--mut);font-size:13px}
+.drop{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;border:2px dashed var(--blue);border-radius:var(--r);padding:28px 16px;cursor:pointer;background:#f0f5fd}
+.drop.over{background:#dfeafb}
+.drop span{color:var(--mut);font-size:13px}
+.list{list-style:none;margin:8px 0;padding:0;display:grid;gap:8px}
+.item{display:grid;grid-template-columns:auto 72px 1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px}
+.item.off{opacity:.45}
+.badge{background:var(--blue);color:#fff;border-radius:8px;min-width:30px;text-align:center;font-weight:700;padding:2px 6px}
+.thumb{width:72px;height:72px;object-fit:cover;border-radius:8px;background:#000}
+.meta{display:grid;gap:4px;min-width:0}
+.meta .name{font-size:12px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta input{width:100%}
+.btns{display:flex;flex-direction:column;gap:2px;align-items:flex-end}
+.btns button{padding:0 8px;font-size:12px}
+input[type=text],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}
+textarea{resize:vertical;background:#f7f9fc}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0}
+label input[type=text],label select,label textarea{margin-top:4px;color:var(--ink)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+fieldset{border:1px solid var(--line);border-radius:10px;margin:10px 0;padding:6px 12px}
+legend{font-size:13px;color:var(--mut);padding:0 6px}
+.chk{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:14px}
+.chk.inline{align-self:end}
+button{font:inherit;border:0;border-radius:8px;padding:8px 14px;background:var(--blue);color:#fff;cursor:pointer}
+button.ghost{background:#e8eef8;color:var(--blue)}
+button.mini{background:#e8eef8;color:var(--blue)}
+button.big{width:100%;font-size:22px;font-weight:800;padding:16px;border-radius:var(--r)}
+button:disabled{background:#b9c4d4;cursor:not-allowed}
+.hint{border-left:4px solid var(--blue);background:#eaf1fc;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:13px}
+.hint.red{border-color:var(--red);background:#fdeeee}
+.hint b{display:block;color:var(--blue)}
+.hint.red b{color:var(--red)}
+.progress{position:relative;height:26px;background:#e8eef8;border-radius:99px;overflow:hidden;margin:12px 0}
+.progress div{height:100%;width:0;background:var(--blue);transition:width .15s}
+.progress span{position:absolute;inset:0;text-align:center;line-height:26px;font-size:12px;color:#fff;mix-blend-mode:difference}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:12px}
+.res{border:1px solid var(--line);border-radius:10px;padding:10px}
+.res video{width:100%;max-height:420px;background:#000;border-radius:8px}
+.res h3{margin:0 0 6px;font-size:14px}
+.res ul{list-style:none;padding:0;margin:8px 0;font-size:12px}
+.res li.ok::before{content:"✔ ";color:#1e8e3e}
+.res li.ng::before{content:"✖ ";color:var(--red)}
+.res a{display:inline-block;margin-top:4px;color:var(--blue);font-weight:700}
+.log{margin:8px 0;padding-left:18px;font-size:13px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.item{grid-template-columns:auto 56px 1fr auto}.thumb{width:56px;height:56px}}
+.meta .chk{white-space:nowrap;margin:2px 0}

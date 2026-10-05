@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>딸깍 영상 편집기</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>딸깍 영상 편집기</h1>
+    <p>소스를 올리고, 한 문단으로 지시하고, 딸깍. 결과를 보며 한 가지씩 고치세요.</p>
+    <ol class="steps">
+      <li data-step="1">1 소스 준비</li>
+      <li data-step="2">2 한 문단 지시</li>
+      <li data-step="3">3 첫 영상 만들기</li>
+      <li data-step="4">4 하나씩 고치기</li>
+    </ol>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="s1" class="card">
+    <h2>1. 영상의 목적과 소스 정하기</h2>
+    <div id="drop" class="drop" tabindex="0">
+      <strong>영상·사진을 끌어놓거나 클릭해서 선택</strong>
+      <span>실제 제작에 쓸 소스만 올리세요. 파일명의 숫자(1, 2, 3…) 순서로 자동 정렬됩니다.</span>
+      <input id="file" type="file" accept="video/*,image/*" multiple hidden>
+    </div>
+    <p id="summary" class="muted">소스 0개</p>
+    <ul id="list" class="list"></ul>
+    <div class="hint blue"><b>순서가 중요한 파일</b> 번호 배지는 장면 순서입니다. ▲▼로 바꾸고, 쓰지 않을 소스는 체크를 해제하세요.</div>
+    <div class="hint red"><b>말실수·재촬영본 주의</b> AI는 이런 걸 잘 못 잡습니다. 해당 소스의 "메모"에 적어 두고 직접 빼거나 순서를 정하세요.</div>
+  </section>
+
+  <section id="s2" class="card">
+    <h2>2. 한 문단으로 지시하기</h2>
+    <div class="grid">
+      <label>주제 (무엇을 소개하나요?)
+        <input id="topic" type="text" placeholder="예: 강북구 치유의 숲길">
+      </label>
+      <label>오프닝 제목 (비우면 주제 사용)
+        <input id="title" type="text" placeholder="예: 도심 속 치유의 숲">
+      </label>
+    </div>
+    <fieldset>
+      <legend>화면 형식 (둘 다 선택하면 각각 만듭니다)</legend>
+      <label class="chk"><input type="checkbox" name="fmt" value="9:16" checked> 세로 쇼츠 9:16</label>
+      <label class="chk"><input type="checkbox" name="fmt" value="16:9"> 가로 롱폼 16:9</label>
+    </fieldset>
+    <fieldset>
+      <legend>스타일 (모르겠다면 2가지로 비교 시안)</legend>
+      <label class="chk"><input type="checkbox" name="sty" value="clean" checked> 깔끔 — 페이드 · 하단 자막바</label>
+      <label class="chk"><input type="checkbox" name="sty" value="pop"> 모션 — 줌 · 굵은 자막 · 진행바</label>
+    </fieldset>
+    <div class="grid">
+      <label>전체 길이
+        <select id="target">
+          <option value="0">자동 (소스 길이에 맞춤)</option>
+          <option value="15">15초</option>
+          <option value="30">30초</option>
+          <option value="60">60초</option>
+        </select>
+      </label>
+      <label class="chk inline"><input id="audio" type="checkbox" checked> 영상 원본 소리 사용</label>
+    </div>
+    <label>생성될 지시문 (복사해서 다른 AI에도 쓸 수 있어요)
+      <textarea id="prompt" rows="4" readonly></textarea>
+    </label>
+    <button id="copy" class="ghost" type="button">지시문 복사</button>
+  </section>
+
+  <section id="s3" class="card">
+    <h2>3. 딸깍 — 첫 영상 만들기</h2>
+    <button id="go" class="big" type="button" disabled>딸깍</button>
+    <p class="muted">영상은 실시간으로 녹화되어 합성됩니다. 만드는 동안 이 탭을 열어 두세요.</p>
+    <div id="progress" class="progress" hidden><div></div><span></span></div>
+    <div id="results" class="results"></div>
+  </section>
+
+  <section id="s4" class="card">
+    <h2>4. 한 가지씩 고치기</h2>
+    <p class="muted">위 2단계의 설정이나 자막을 <b>한 가지만</b> 바꾸고 다시 딸깍하세요. 무엇이 바뀌었는지 기록됩니다.</p>
+    <ul id="log" class="log"><li class="muted">아직 수정 기록이 없습니다.</li></ul>
+    <div class="hint blue"><b>AI가 확인하지 못하는 것</b> 아래 자동 검사는 파일·형식·재생 여부만 봅니다. 소리와 자막 내용은 직접 재생해서 확인하세요.</div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
