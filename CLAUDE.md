@@ -20,5 +20,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Rendering is real-time and needs the tab visible (rAF is throttled in background tabs).
 - `createMediaElementSource` can only be called once per element and is bound to one AudioContext, so a single shared context (`audioCtx()`) is used.
+- Always feed a silent `ConstantSource` into the recorder's audio destination and call `requestFrame()` per tick (`captureStream(0)`); otherwise segments without video-clip audio/changing pixels are dropped from the recording.
 - Copy `FileList` before clearing the file input; clearing empties it.
 - Output is `.mp4` if the browser's MediaRecorder supports it, otherwise `.webm`.

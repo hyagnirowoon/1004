@@ -247,6 +247,7 @@ function pickMime() {
   return c.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
 }
 
+let frameHook = null;
 function playFor(seg, draw) {
   return new Promise((resolve) => {
     const t0 = performance.now();
@@ -254,6 +255,7 @@ function playFor(seg, draw) {
       const t = (now - t0) / 1000;
       if (t >= seg.dur) return resolve();
       draw(t);
+      if (frameHook) frameHook();
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -271,8 +273,16 @@ async function render(fmt, style, s, onProgress) {
 
   const ac = audioCtx();
   const dest = ac.createMediaStreamDestination();
-  const stream = canvas.captureStream(FPS);
+  const stream = canvas.captureStream(0); // 프레임은 직접 요청한다(정지 화면에서도 시간이 흐르도록)
+  const vtrack = stream.getVideoTracks()[0];
   dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
+  // 무음 소스를 계속 흘려야 영상 클립이 없는 구간(제목·사진)에서도 녹화 시간이 흐른다
+  await ac.resume();
+  const silence = ac.createConstantSource();
+  const mute = ac.createGain();
+  mute.gain.value = 0;
+  silence.connect(mute).connect(dest);
+  silence.start();
 
   const mime = pickMime();
   const rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 6_000_000 });
@@ -281,6 +291,7 @@ async function render(fmt, style, s, onProgress) {
   const stopped = new Promise((r) => (rec.onstop = r));
   rec.start(500);
 
+  frameHook = () => vtrack.requestFrame && vtrack.requestFrame();
   let before = 0;
   for (const seg of segs) {
     let node = null;
@@ -307,8 +318,11 @@ async function render(fmt, style, s, onProgress) {
   }
   drawFrame(ctx, w, h, style, segs[segs.length - 1], segs[segs.length - 1].dur - 0.01, total, total - segs[segs.length - 1].dur);
   await new Promise((r) => setTimeout(r, 200));
+  frameHook();
   rec.stop();
   await stopped;
+  frameHook = null;
+  silence.stop();
   return { blob: new Blob(chunks, { type: rec.mimeType || "video/webm" }), total, mime: rec.mimeType };
 }
 
