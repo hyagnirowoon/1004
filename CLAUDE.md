@@ -14,10 +14,14 @@ A YouTube music-video playlist editor: a build-less static web app (vanilla HTML
 
 ## Architecture
 
-- `lib.js` — pure logic with no DOM access (YouTube ID parsing, `m:ss` duration parse/format, track/playlist normalization, `moveItem`, and exporters: `buildChapters`, `buildTracklist`, `toJSON`, `toCSV`). It is a UMD module: `window.PlaylistLib` in the browser, `module.exports` in Node. Put anything testable here.
+- `lib.js` — pure logic with no DOM access (YouTube ID parsing, `m:ss` duration parse/format, track/playlist normalization, `moveItem`, local-file helpers `parseFileName` / `readMp4Duration`, and exporters: `buildChapters`, `buildTracklist`, `toJSON`, `toCSV`). It is a UMD module: `window.PlaylistLib` in the browser, `module.exports` in Node. Put anything testable here.
 - `app.js` — all DOM/UI code in one IIFE. State is a single `pl` object (`{title, description, tracks[]}`) persisted to `localStorage` (`mv-playlist-editor:v1`). Structural changes go through `mutate(fn)` (snapshot → change → save → full re-render); typing in fields goes through `touch()` + `setField()` so one run of typing is one undo step.
 - `index.html` / `style.css` — static markup (the editor form and export dialog are declared in HTML and filled by `app.js`) and theme tokens (light/dark via `prefers-color-scheme`).
 - `test/lib.test.js` — tests for `lib.js`.
+
+## Local video import (folder / files)
+
+The user's videos are usually *not on YouTube yet*, so tracks can come from local files (`📁 폴더에서 가져오기`, `영상 파일 선택` → `importVideoFiles` in `app.js`). Nothing is uploaded: files are only `slice()`d / probed in the browser, so multi-GB files are fine. Duration comes from `readMp4Duration` (reads only box headers → `mvhd`; works for mp4/mov regardless of codec) and falls back to a `<video preload=metadata>` probe (webm/mkv/...). Imported tracks get `status: 'ready'` and `fileName` (the relative path, used to skip duplicates on re-import). Never read a whole file into memory (`file.arrayBuffer()` on the full file) — that is exactly what breaks for large videos.
 
 ## Conventions and gotchas
 

@@ -115,13 +115,114 @@ test('buildTracklist: 링크 포함/미포함', () => {
 
 test('toCSV: 쉼표·따옴표 이스케이프', () => {
   const rows = L.toCSV(sample()).split('\r\n');
-  assert.equal(rows[0], '순서,제목,아티스트,링크,길이,상태,공개 예정일,메모');
-  assert.equal(rows[1], `1,Intro,Me,https://www.youtube.com/watch?v=${ID},1:05,planned,,`);
-  assert.equal(rows[2], '2,"Song, ""Two""",Me,,3:20,planned,,');
+  assert.equal(rows[0], '순서,제목,아티스트,링크,길이,상태,공개 예정일,메모,파일명');
+  assert.equal(rows[1], `1,Intro,Me,https://www.youtube.com/watch?v=${ID},1:05,planned,,,`);
+  assert.equal(rows[2], '2,"Song, ""Two""",Me,,3:20,planned,,,');
 });
 
 test('toJSON ↔ normalizePlaylist 왕복', () => {
   const original = L.normalizePlaylist(sample());
   const again = L.normalizePlaylist(JSON.parse(L.toJSON(original)));
   assert.deepEqual(again, original);
+});
+
+test('isVideoFileName / parseFileName', () => {
+  assert.equal(L.isVideoFileName('a.MP4'), true);
+  assert.equal(L.isVideoFileName('a.mkv'), true);
+  assert.equal(L.isVideoFileName('cover.jpg'), false);
+  assert.equal(L.isVideoFileName('notes.txt'), false);
+  assert.equal(L.isVideoFileName('mp4'), false);
+
+  const cases = [
+    ['01 - Alpha Song.mp4', '', 'Alpha Song'],
+    ['Band A - Alpha.mov', 'Band A', 'Alpha'],
+    ['03_Charlie_Final.mkv', '', 'Charlie Final'],
+    ['02. Intro.mp4', '', 'Intro'],
+    ['50 Cent - In Da Club.mp4', '50 Cent', 'In Da Club'],
+    ['2NE1 - Fire.mp4', '2NE1', 'Fire'],
+    ['1-800-Song.mp4', '', '1-800-Song'],
+    ['3.14 Pi Song.mp4', '', '3.14 Pi Song'],
+    ['Artist - Title - Remix.webm', 'Artist', 'Title - Remix'],
+    ['Artist – Title.mp4', 'Artist', 'Title'],
+    ['Song Vol.2.mp4', '', 'Song Vol.2'],
+    ['no_extension_name', '', 'no extension name'],
+    ['한글 가수 - 한글 제목.mp4', '한글 가수', '한글 제목'],
+  ];
+  for (const [input, artist, title] of cases) {
+    assert.deepEqual(L.parseFileName(input), { artist, title }, input);
+  }
+});
+
+// ---- MP4 길이 읽기 ----
+const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+const box = (type, ...parts) => {
+  const body = Buffer.concat(parts);
+  return Buffer.concat([u32(8 + body.length), Buffer.from(type, 'latin1'), body]);
+};
+const mvhdV0 = (timescale, duration) => box('mvhd', Buffer.alloc(4), u32(0), u32(0), u32(timescale), u32(duration), Buffer.alloc(80));
+const mvhdV1 = (timescale, duration) => {
+  const dur = Buffer.alloc(8);
+  dur.writeBigUInt64BE(BigInt(duration));
+  const ver = Buffer.from([1, 0, 0, 0]);
+  return box('mvhd', ver, Buffer.alloc(16), u32(timescale), dur, Buffer.alloc(80));
+};
+const ftyp = box('ftyp', Buffer.from('isom', 'latin1'), u32(0), Buffer.from('isom', 'latin1'));
+const trak = box('trak', Buffer.alloc(200));
+const bufReader = (buf) => async (start, len) => new Uint8Array(buf.subarray(start, start + len));
+
+test('readMp4Duration: moov가 앞/뒤에 있는 경우, v0/v1 mvhd', async () => {
+  const front = Buffer.concat([ftyp, box('moov', mvhdV0(1000, 225500), trak), box('mdat', Buffer.alloc(500))]);
+  assert.equal(await L.readMp4Duration(bufReader(front), front.length), 225.5);
+
+  const back = Buffer.concat([ftyp, box('free', Buffer.alloc(40)), box('mdat', Buffer.alloc(5000)), box('moov', trak, mvhdV1(600, 600 * 3723))]);
+  assert.equal(await L.readMp4Duration(bufReader(back), back.length), 3723);
+});
+
+test('readMp4Duration: mdat가 5GB여도 몇 번만 읽는다 (64비트 크기)', async () => {
+  const mdatSize = 0x140000000; // 5GiB
+  const sizeField = Buffer.alloc(8);
+  sizeField.writeBigUInt64BE(BigInt(mdatSize));
+  const bigMdatHeader = Buffer.concat([u32(1), Buffer.from('mdat', 'latin1'), sizeField]);
+  const moov = box('moov', mvhdV0(1000, 210000));
+  const moovStart = ftyp.length + mdatSize;
+  const size = moovStart + moov.length;
+  let reads = 0;
+  let bytes = 0;
+  const read = async (start, len) => {
+    reads++;
+    bytes += len;
+    const out = Buffer.alloc(Math.max(0, Math.min(len, size - start)));
+    const put = (at, data) => {
+      const from = Math.max(start, at);
+      const to = Math.min(start + out.length, at + data.length);
+      if (to > from) data.copy(out, from - start, from - at, to - at);
+    };
+    put(0, ftyp);
+    put(ftyp.length, bigMdatHeader);
+    put(moovStart, moov);
+    return new Uint8Array(out);
+  };
+  assert.equal(await L.readMp4Duration(read, size), 210);
+  assert.ok(reads <= 10, 'reads=' + reads);
+  assert.ok(bytes < 500, 'bytes=' + bytes);
+});
+
+test('readMp4Duration: 읽을 수 없으면 null', async () => {
+  const none = [
+    Buffer.alloc(0),
+    Buffer.from('this is not an mp4 file at all, just text'),
+    Buffer.concat([ftyp, box('mdat', Buffer.alloc(100))]), // moov 없음
+    Buffer.concat([ftyp, box('moov', trak)]), // mvhd 없음
+    Buffer.concat([ftyp, box('moov', mvhdV0(1000, 0))]), // 조각난 MP4: 길이 0
+    Buffer.concat([ftyp, box('moov', mvhdV0(0, 1000))]),
+    Buffer.concat([ftyp, box('moov', mvhdV0(1000, 0xffffffff))]),
+    Buffer.concat([ftyp, Buffer.from([0, 0, 0, 4, 0x6d, 0x6f, 0x6f, 0x76])]), // 크기가 머리말보다 작은 깨진 박스
+  ];
+  for (const buf of none) assert.equal(await L.readMp4Duration(bufReader(buf), buf.length), null);
+  assert.equal(await L.readMp4Duration(async () => { throw new Error('io'); }, 100), null);
+});
+
+test('normalizeTrack: fileName 보존', () => {
+  assert.equal(L.normalizeTrack({ fileName: ' MV/01 - Intro.mp4 ' }).fileName, 'MV/01 - Intro.mp4');
+  assert.equal(L.normalizeTrack({}).fileName, '');
 });

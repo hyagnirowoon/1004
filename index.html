@@ -29,7 +29,12 @@
         <textarea id="add-input" rows="1" placeholder="유튜브 링크·영상 ID 붙여넣기 (여러 줄 가능)" aria-label="유튜브 링크"></textarea>
         <button type="submit" class="primary">추가</button>
         <button type="button" id="btn-add-blank" title="아직 업로드 전인 곡을 미리 자리만 잡아둬요">+ 업로드 예정 곡</button>
+        <button type="button" id="btn-add-folder" title="폴더 안의 영상 파일 이름과 길이를 읽어서 곡으로 추가해요">📁 폴더에서 가져오기</button>
+        <button type="button" id="btn-add-files" title="영상 파일을 골라서 이름과 길이를 읽어와요">영상 파일 선택</button>
+        <input type="file" id="folder-input" webkitdirectory multiple hidden>
+        <input type="file" id="files-input" accept="video/*,.mkv,.mov,.m4v,.mts,.m2ts,.avi,.wmv,.flv,.mpg,.mpeg,.3gp,.ogv" multiple hidden>
       </form>
+      <p class="hint add-hint">폴더·영상 파일은 <strong>업로드되지 않아요.</strong> 파일 이름과 길이만 이 브라우저 안에서 읽고, 영상 내용은 어디로도 전송되지 않아요. 큰 파일도 괜찮아요.</p>
 
       <div class="filters">
         <input id="q" type="search" placeholder="제목·아티스트 검색" aria-label="검색">
@@ -76,6 +81,9 @@
         <p id="dur-hint" class="hint">길이는 <code>3:45</code>, <code>1:02:03</code>, 또는 초 단위 숫자로 입력해요. 타임스탬프 계산에 쓰여요.</p>
         <label>공개 예정일
           <input name="publishAt" type="date">
+        </label>
+        <label>원본 파일 <span class="opt">(폴더 가져오기로 채워져요)</span>
+          <input name="fileName" placeholder="예: MV/01 - Intro.mp4">
         </label>
         <label>메모
           <textarea name="note" rows="3" placeholder="콘셉트, 촬영 메모, 체크할 것 …"></textarea>

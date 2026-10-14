@@ -96,7 +96,7 @@
   const indexOf = (id) => pl.tracks.findIndex((t) => t.id === id);
 
   let toastTimer = 0;
-  function toast(msg, actionLabel, action) {
+  function toast(msg, actionLabel, action, sticky) {
     const el = $('#toast');
     el.replaceChildren(h('span', { text: msg }));
     if (actionLabel) {
@@ -104,7 +104,7 @@
     }
     el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, actionLabel ? 6000 : 3500);
+    if (!sticky) toastTimer = setTimeout(hideToast, actionLabel ? 6000 : 3500);
   }
   function hideToast() {
     $('#toast').hidden = true;
@@ -194,7 +194,7 @@
     if (!rows.length) {
       empty.textContent = pl.tracks.length
         ? '조건에 맞는 곡이 없어요.'
-        : '아직 곡이 없어요. 위에 유튜브 링크를 붙여넣거나 “+ 업로드 예정 곡”으로 시작해 보세요.';
+        : '아직 곡이 없어요. 유튜브 링크를 붙여넣거나, “📁 폴더에서 가져오기”로 영상 파일을 읽어오거나, “+ 업로드 예정 곡”으로 시작해 보세요.';
     }
   }
 
@@ -245,6 +245,7 @@
     f.duration.removeAttribute('aria-invalid');
     f.status.value = t.status;
     f.publishAt.value = t.publishAt;
+    f.fileName.value = t.fileName;
     f.note.value = t.note;
   }
 
@@ -331,6 +332,115 @@
     mutate(() => pl.tracks.push(t));
     select(t.id, true);
   });
+
+  /* ---------- 로컬 영상 파일 / 폴더 가져오기 ---------- */
+
+  const VIDEO_PROBE_TIMEOUT_MS = 20000;
+  const PROBE_CONCURRENCY = 3;
+  let importing = false;
+
+  // <video>가 메타데이터만 읽도록 해서 길이(초)를 얻는다. 파일은 서버로 가지 않고 메모리에 통째로 올리지도 않는다.
+  function probeWithVideoElement(file) {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      const url = URL.createObjectURL(file);
+      let finished = false;
+      const finish = (value) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        video.removeAttribute('src');
+        video.load();
+        URL.revokeObjectURL(url);
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish(null), VIDEO_PROBE_TIMEOUT_MS);
+      video.preload = 'metadata';
+      video.muted = true;
+      video.onloadedmetadata = () => finish(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null);
+      video.onerror = () => finish(null);
+      video.src = url;
+    });
+  }
+
+  // MP4/MOV는 파일 머리말을 직접 읽어서(코덱과 무관) 길이를 구하고, 안 되면 <video>로 시도한다.
+  async function probeDuration(file) {
+    if (L.isMp4FileName(file.name)) {
+      const read = async (start, len) => new Uint8Array(await file.slice(start, start + len).arrayBuffer());
+      const secs = await L.readMp4Duration(read, file.size);
+      if (secs) return Math.round(secs);
+    }
+    const secs = await probeWithVideoElement(file);
+    return secs ? Math.round(secs) : null;
+  }
+
+  async function importVideoFiles(fileList) {
+    if (importing) return toast('이미 가져오는 중이에요. 끝난 뒤에 다시 시도해 주세요.');
+    const videos = Array.from(fileList).filter((f) => (f.type || '').startsWith('video/') || L.isVideoFileName(f.name));
+    if (!videos.length) return toast('영상 파일을 찾지 못했어요. (mp4, mov, mkv, webm 등)');
+
+    const pathOf = (f) => f.webkitRelativePath || f.name;
+    videos.sort((a, b) => pathOf(a).localeCompare(pathOf(b), undefined, { numeric: true, sensitivity: 'base' }));
+
+    const known = new Set(pl.tracks.map((t) => t.fileName).filter(Boolean));
+    const fresh = [];
+    let dup = 0;
+    for (const f of videos) {
+      if (known.has(pathOf(f))) dup++;
+      else {
+        known.add(pathOf(f));
+        fresh.push(f);
+      }
+    }
+    if (!fresh.length) return toast('이미 목록에 있는 파일이에요. (' + dup + '개 건너뜀)');
+
+    importing = true;
+    $('#btn-add-folder').disabled = $('#btn-add-files').disabled = true;
+    try {
+      const durations = new Array(fresh.length).fill(null);
+      let next = 0;
+      let done = 0;
+      const worker = async () => {
+        while (next < fresh.length) {
+          const i = next++;
+          try {
+            durations[i] = await probeDuration(fresh[i]);
+          } catch (e) {
+            durations[i] = null;
+          }
+          toast('길이 읽는 중… ' + ++done + '/' + fresh.length, null, null, true);
+        }
+      };
+      toast('길이 읽는 중… 0/' + fresh.length, null, null, true);
+      await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, fresh.length) }, worker));
+
+      const tracks = fresh.map((f, i) => {
+        const { title, artist } = L.parseFileName(f.name);
+        return L.newTrack({ title, artist, duration: durations[i], status: 'ready', fileName: pathOf(f) });
+      });
+      mutate(() => pl.tracks.push(...tracks));
+      select(tracks[0].id);
+      listEl.querySelector('[data-id="' + tracks[0].id + '"]')?.scrollIntoView({ block: 'nearest' });
+
+      const unread = durations.filter((d) => d === null).length;
+      const notes = [fresh.length + '곡 추가 (상태: 업로드 준비)'];
+      if (unread) notes.push('길이를 못 읽은 파일 ' + unread + '개 — 직접 입력해 주세요');
+      if (dup) notes.push('이미 있는 파일 ' + dup + '개 건너뜀');
+      toast(notes.join(' · '), '되돌리기', undo);
+    } finally {
+      importing = false;
+      $('#btn-add-folder').disabled = $('#btn-add-files').disabled = false;
+    }
+  }
+
+  for (const [button, input] of [['#btn-add-folder', '#folder-input'], ['#btn-add-files', '#files-input']]) {
+    $(button).addEventListener('click', () => $(input).click());
+    $(input).addEventListener('change', (e) => {
+      const files = Array.from(e.target.files); // value를 비우면 목록도 비워지므로 먼저 복사
+      e.target.value = '';
+      if (files.length) importVideoFiles(files);
+    });
+  }
 
   function removeTrack(id) {
     const i = indexOf(id);

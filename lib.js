@@ -9,6 +9,9 @@
   const STATUSES = ['planned', 'production', 'ready', 'uploaded'];
   const ID_RE = /^[A-Za-z0-9_-]{11}$/;
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const VIDEO_EXT = ['mp4', 'm4v', 'mov', 'mkv', 'webm', 'avi', 'wmv', 'flv', 'mpg', 'mpeg', 'mts', 'm2ts', '3gp', 'ogv'];
+  const VIDEO_EXT_RE = new RegExp('\\.(' + VIDEO_EXT.join('|') + ')$', 'i');
+  const MP4_EXT_RE = /\.(mp4|m4v|mov|3gp)$/i;
 
   const str = (v) => (v == null ? '' : String(v)).trim();
 
@@ -98,6 +101,7 @@
       status: STATUSES.includes(r.status) ? r.status : 'planned',
       publishAt: DATE_RE.test(str(r.publishAt)) ? str(r.publishAt) : '',
       note: str(r.note),
+      fileName: str(r.fileName),
     };
   }
 
@@ -122,6 +126,79 @@
 
   function newTrack(partial) {
     return normalizeTrack(Object.assign({ id: makeId() }, partial));
+  }
+
+  /* ---------- 로컬 영상 파일 ---------- */
+
+  const isVideoFileName = (name) => VIDEO_EXT_RE.test(str(name));
+  const isMp4FileName = (name) => MP4_EXT_RE.test(str(name));
+
+  // "01 - Band - Song_Final.mp4" 같은 파일명에서 제목/아티스트를 추측한다 (틀리면 직접 고치면 됨).
+  function parseFileName(name) {
+    let s = str(name).replace(VIDEO_EXT_RE, '');
+    s = s.replace(/^\d{1,3}\s*[-._)]\s*(?=\D)/, ''); // "01 - ", "02. ", "03_" 같은 트랙 번호
+    s = s.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+    const m = s.match(/^(.+?)\s+[-\u2013\u2014]\s+(.+)$/);
+    return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: '', title: s };
+  }
+
+  // MP4/MOV의 mvhd 박스에서 길이(초)를 읽는다. 파일 전체를 읽지 않고 박스 머리말만 건너뛰며 찾기 때문에
+  // 수 GB짜리 파일이나 브라우저가 재생하지 못하는 코덱이어도 동작한다.
+  //   read(start, length) -> Promise<Uint8Array>   size: 전체 바이트 수
+  // 못 찾으면 null (조각난 MP4처럼 mvhd 길이가 0인 경우 포함).
+  async function readMp4Duration(read, size) {
+    const u32 = (b, o) => b[o] * 16777216 + ((b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]);
+
+    async function header(pos, end) {
+      if (pos + 8 > end) return null;
+      const b = await read(pos, Math.min(16, end - pos));
+      if (!b || b.length < 8) return null;
+      let boxSize = u32(b, 0);
+      let hdr = 8;
+      if (boxSize === 1) {
+        if (b.length < 16) return null;
+        boxSize = u32(b, 8) * 4294967296 + u32(b, 12);
+        hdr = 16;
+      } else if (boxSize === 0) {
+        boxSize = end - pos;
+      }
+      if (boxSize < hdr) return null;
+      return { type: String.fromCharCode(b[4], b[5], b[6], b[7]), start: pos, hdr, size: boxSize };
+    }
+
+    async function find(from, to, type) {
+      let pos = from;
+      for (let hops = 0; hops < 500 && pos < to; hops++) {
+        const box = await header(pos, to);
+        if (!box) return null;
+        if (box.type === type) return box;
+        pos += box.size;
+      }
+      return null;
+    }
+
+    try {
+      const moov = await find(0, size, 'moov');
+      if (!moov) return null;
+      const mvhd = await find(moov.start + moov.hdr, Math.min(size, moov.start + moov.size), 'mvhd');
+      if (!mvhd) return null;
+      const b = await read(mvhd.start + mvhd.hdr, 32);
+      if (!b || b.length < 20) return null;
+      let timescale;
+      let duration;
+      if (b[0] === 1) {
+        if (b.length < 32) return null;
+        timescale = u32(b, 20);
+        duration = u32(b, 24) * 4294967296 + u32(b, 28);
+      } else {
+        timescale = u32(b, 12);
+        duration = u32(b, 16);
+        if (duration === 4294967295) return null; // 길이 미정
+      }
+      return timescale && duration ? duration / timescale : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function moveItem(arr, from, to) {
@@ -199,7 +276,7 @@
       const s = v == null ? '' : String(v);
       return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const rows = [['순서', '제목', '아티스트', '링크', '길이', '상태', '공개 예정일', '메모']];
+    const rows = [['순서', '제목', '아티스트', '링크', '길이', '상태', '공개 예정일', '메모', '파일명']];
     pl.tracks.forEach((t, i) => {
       rows.push([
         i + 1,
@@ -210,6 +287,7 @@
         t.status,
         t.publishAt,
         t.note,
+        t.fileName,
       ]);
     });
     return rows.map((r) => r.map(esc).join(',')).join('\r\n');
@@ -227,6 +305,10 @@
     normalizeTrack,
     normalizePlaylist,
     newTrack,
+    isVideoFileName,
+    isMp4FileName,
+    parseFileName,
+    readMp4Duration,
     moveItem,
     buildChapters,
     buildTracklist,
