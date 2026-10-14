@@ -138,11 +138,11 @@
   }
 
   function visibleTracks() {
-    const q = $('#q').value.trim().toLowerCase();
+    const q = $('#q').value.trim().normalize('NFC').toLowerCase();
     const status = $('#status-filter').value;
     return pl.tracks
       .map((t, i) => ({ t, i }))
-      .filter(({ t }) => (!status || t.status === status) && (!q || (t.title + ' ' + t.artist).toLowerCase().includes(q)));
+      .filter(({ t }) => (!status || t.status === status) && (!q || (t.title + ' ' + t.artist).normalize('NFC').toLowerCase().includes(q)));
   }
 
   function thumb(t) {
@@ -249,12 +249,12 @@
     f.note.value = t.note;
   }
 
-  function select(id, focusTitle) {
+  function select(id, focusTitle, noScroll) {
     selectedId = id;
     for (const row of listEl.children) row.classList.toggle('selected', row.dataset.id === id);
     renderEditor();
     if (focusTitle) form.elements.title.focus();
-    else if (window.matchMedia('(max-width: 900px)').matches) {
+    else if (!noScroll && window.matchMedia('(max-width: 900px)').matches) {
       form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
@@ -376,25 +376,22 @@
 
   async function importVideoFiles(fileList) {
     if (importing) return toast('이미 가져오는 중이에요. 끝난 뒤에 다시 시도해 주세요.');
-    const videos = Array.from(fileList).filter((f) => (f.type || '').startsWith('video/') || L.isVideoFileName(f.name));
+    const pathOf = (f) => (f.webkitRelativePath || f.name).normalize('NFC');
+    const videos = Array.from(fileList).filter(
+      (f) => !L.isJunkPath(pathOf(f)) && ((f.type || '').startsWith('video/') || L.isVideoFileName(f.name))
+    );
     if (!videos.length) return toast('영상 파일을 찾지 못했어요. (mp4, mov, mkv, webm 등)');
 
-    const pathOf = (f) => f.webkitRelativePath || f.name;
     videos.sort((a, b) => pathOf(a).localeCompare(pathOf(b), undefined, { numeric: true, sensitivity: 'base' }));
 
-    const known = new Set(pl.tracks.map((t) => t.fileName).filter(Boolean));
-    const fresh = [];
-    let dup = 0;
-    for (const f of videos) {
-      if (known.has(pathOf(f))) dup++;
-      else {
-        known.add(pathOf(f));
-        fresh.push(f);
-      }
-    }
+    const fresh = videos.filter((f) => !pl.tracks.some((t) => L.sameLocalFile(t, { path: pathOf(f), name: f.name, size: f.size })));
+    const dup = videos.length - fresh.length;
     if (!fresh.length) return toast('이미 목록에 있는 파일이에요. (' + dup + '개 건너뜀)');
 
     importing = true;
+    // 버튼을 잠그면 포커스가 사라지니, 끝나면 되돌려 준다 (키보드·스크린리더 사용자용)
+    const trigger = document.activeElement && /^btn-add-(folder|files)$/.test(document.activeElement.id) ? document.activeElement : null;
+    const selectedAtStart = selectedId;
     $('#btn-add-folder').disabled = $('#btn-add-files').disabled = true;
     try {
       const durations = new Array(fresh.length).fill(null);
@@ -416,11 +413,14 @@
 
       const tracks = fresh.map((f, i) => {
         const { title, artist } = L.parseFileName(f.name);
-        return L.newTrack({ title, artist, duration: durations[i], status: 'ready', fileName: pathOf(f) });
+        return L.newTrack({ title, artist, duration: durations[i], status: 'ready', fileName: pathOf(f), fileSize: f.size });
       });
       mutate(() => pl.tracks.push(...tracks));
-      select(tracks[0].id);
-      listEl.querySelector('[data-id="' + tracks[0].id + '"]')?.scrollIntoView({ block: 'nearest' });
+      // 읽는 동안 사용자가 다른 곡을 고르거나 입력 중이면 그 흐름을 뺏지 않는다
+      if (selectedId === selectedAtStart && !form.contains(document.activeElement)) {
+        select(tracks[0].id, false, true);
+        listEl.querySelector('[data-id="' + tracks[0].id + '"]')?.scrollIntoView({ block: 'nearest' });
+      }
 
       const unread = durations.filter((d) => d === null).length;
       const notes = [fresh.length + '곡 추가 (상태: 업로드 준비)'];
@@ -430,6 +430,7 @@
     } finally {
       importing = false;
       $('#btn-add-folder').disabled = $('#btn-add-files').disabled = false;
+      if (trigger) trigger.focus();
     }
   }
 

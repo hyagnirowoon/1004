@@ -21,7 +21,7 @@ A YouTube music-video playlist editor: a build-less static web app (vanilla HTML
 
 ## Local video import (folder / files)
 
-The user's videos are usually *not on YouTube yet*, so tracks can come from local files (`📁 폴더에서 가져오기`, `영상 파일 선택` → `importVideoFiles` in `app.js`). Nothing is uploaded: files are only `slice()`d / probed in the browser, so multi-GB files are fine. Duration comes from `readMp4Duration` (reads only box headers → `mvhd`; works for mp4/mov regardless of codec) and falls back to a `<video preload=metadata>` probe (webm/mkv/...). Imported tracks get `status: 'ready'` and `fileName` (the relative path, used to skip duplicates on re-import). Never read a whole file into memory (`file.arrayBuffer()` on the full file) — that is exactly what breaks for large videos.
+The user's videos are usually *not on YouTube yet*, so tracks can come from local files (`📁 폴더에서 가져오기`, `영상 파일 선택` → `importVideoFiles` in `app.js`). Nothing is uploaded: files are only `slice()`d / probed in the browser, so multi-GB files are fine. Duration comes from `readMp4Duration` (reads only box headers → `mvhd`; works for mp4/mov regardless of codec) and falls back to a `<video preload=metadata>` probe (webm/mkv/...). Imported tracks get `status: 'ready'`, `fileName` (relative path, for display) and `fileSize`; re-imports skip a file when `sameLocalFile` matches name + size (path only for old tracks without a size). macOS junk (`._*`, `.DS_Store`, `__MACOSX/`) is ignored via `isJunkPath`, and names are NFC-normalized (macOS may hand over NFD Korean). Never read a whole file into memory (`file.arrayBuffer()` on the full file) — that is exactly what breaks for large videos.
 
 ## Conventions and gotchas
 

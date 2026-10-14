@@ -102,6 +102,7 @@
       publishAt: DATE_RE.test(str(r.publishAt)) ? str(r.publishAt) : '',
       note: str(r.note),
       fileName: str(r.fileName),
+      fileSize: Number(r.fileSize) > 0 ? Math.round(Number(r.fileSize)) : null,
     };
   }
 
@@ -135,11 +136,28 @@
 
   // "01 - Band - Song_Final.mp4" 같은 파일명에서 제목/아티스트를 추측한다 (틀리면 직접 고치면 됨).
   function parseFileName(name) {
-    let s = str(name).replace(VIDEO_EXT_RE, '');
-    s = s.replace(/^\d{1,3}\s*[-._)]\s*(?=\D)/, ''); // "01 - ", "02. ", "03_" 같은 트랙 번호
+    // macOS는 한글 파일명을 분해형(NFD)으로 줄 때가 있어서 NFC로 맞춘다 (검색·중복 비교가 되도록)
+    let s = str(name).normalize('NFC').replace(VIDEO_EXT_RE, '');
+    // "01 - ", "02. ", "03_" 같은 트랙 번호, 그리고 0으로 시작하는 "01 " ("50 Cent" 같은 이름은 건드리지 않는다)
+    s = s.replace(/^(?:\d{1,3}\s*[-._)]\s*|0\d\s+)(?=\D)/, '');
     s = s.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
     const m = s.match(/^(.+?)\s+[-\u2013\u2014]\s+(.+)$/);
     return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: '', title: s };
+  }
+
+  // macOS가 외장드라이브/zip에 남기는 숨김 파일(._이름.mp4, .DS_Store)과 __MACOSX 폴더는 영상이 아니다.
+  function isJunkPath(path) {
+    const parts = str(path).split('/');
+    return parts[parts.length - 1].startsWith('.') || parts.includes('__MACOSX');
+  }
+
+  // 이미 목록에 있는 파일인가? 크기를 알면 "파일 이름 + 크기"로 (폴더/파일 선택기 어느 쪽으로 넣었든 같게),
+  // 모르면(옛 데이터) 경로가 같은지로 판단한다. file = { path, name, size }
+  function sameLocalFile(track, file) {
+    if (!track.fileName) return false;
+    const nfc = (v) => str(v).normalize('NFC');
+    if (track.fileSize) return nfc(track.fileName).split('/').pop() === nfc(file.name) && track.fileSize === file.size;
+    return nfc(track.fileName) === nfc(file.path);
   }
 
   // MP4/MOV의 mvhd 박스에서 길이(초)를 읽는다. 파일 전체를 읽지 않고 박스 머리말만 건너뛰며 찾기 때문에
@@ -308,6 +326,8 @@
     isVideoFileName,
     isMp4FileName,
     parseFileName,
+    isJunkPath,
+    sameLocalFile,
     readMp4Duration,
     moveItem,
     buildChapters,

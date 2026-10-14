@@ -226,3 +226,54 @@ test('normalizeTrack: fileName 보존', () => {
   assert.equal(L.normalizeTrack({ fileName: ' MV/01 - Intro.mp4 ' }).fileName, 'MV/01 - Intro.mp4');
   assert.equal(L.normalizeTrack({}).fileName, '');
 });
+
+test('parseFileName: "01 제목" 형태와 NFD 한글', () => {
+  const cases = [
+    ['01 아이유 - 좋은날.mp4', '아이유', '좋은날'],
+    ['01 좋은날.mp4', '', '좋은날'],
+    ['07 Seven.mp4', '', 'Seven'],
+    ['007 Theme.mp4', '', '007 Theme'], // 세 자리는 건드리지 않는다
+    ['50 Cent - In Da Club.mp4', '50 Cent', 'In Da Club'],
+  ];
+  for (const [input, artist, title] of cases) assert.deepEqual(L.parseFileName(input), { artist, title }, input);
+
+  const nfd = '한글 가수 - 노래.mp4'.normalize('NFD');
+  assert.notEqual(nfd, nfd.normalize('NFC'));
+  assert.deepEqual(L.parseFileName(nfd), { artist: '한글 가수', title: '노래' });
+  assert.equal(L.parseFileName(nfd).title, '노래'.normalize('NFC'));
+});
+
+test('isJunkPath: macOS 숨김 파일과 __MACOSX', () => {
+  assert.equal(L.isJunkPath('MV/._01 - Song.mp4'), true);
+  assert.equal(L.isJunkPath('._01 - Song.mp4'), true);
+  assert.equal(L.isJunkPath('MV/.DS_Store'), true);
+  assert.equal(L.isJunkPath('__MACOSX/MV/._01.mp4'), true);
+  assert.equal(L.isJunkPath('MV/__MACOSX/x.mp4'), true);
+  assert.equal(L.isJunkPath('MV/01 - Song.mp4'), false);
+  assert.equal(L.isJunkPath('MV/sub/Song.mp4'), false);
+  assert.equal(L.isJunkPath('.hidden-root/01.mp4'), false); // 고른 폴더 이름만 점으로 시작하는 경우는 통과
+});
+
+test('sameLocalFile: 이름+크기로 같은 파일 판단 (경로가 달라도), 크기를 모르면 경로로', () => {
+  const t = L.newTrack({ fileName: 'MV/Band B - Bravo.mp4', fileSize: 1000 });
+  assert.equal(L.sameLocalFile(t, { path: 'MV/Band B - Bravo.mp4', name: 'Band B - Bravo.mp4', size: 1000 }), true);
+  assert.equal(L.sameLocalFile(t, { path: 'Bravo.mp4', name: 'Band B - Bravo.mp4', size: 1000 }), true, '파일 선택기로 같은 파일');
+  assert.equal(L.sameLocalFile(t, { path: 'MV/Band B - Bravo.mp4', name: 'Band B - Bravo.mp4', size: 2000 }), false, '크기가 다르면 다른 파일');
+  assert.equal(L.sameLocalFile(t, { path: 'MV/Other.mp4', name: 'Other.mp4', size: 1000 }), false);
+
+  const legacy = L.newTrack({ fileName: 'MV/Old.mp4' }); // fileSize 없음
+  assert.equal(legacy.fileSize, null);
+  assert.equal(L.sameLocalFile(legacy, { path: 'MV/Old.mp4', name: 'Old.mp4', size: 5 }), true);
+  assert.equal(L.sameLocalFile(legacy, { path: 'Old.mp4', name: 'Old.mp4', size: 5 }), false);
+  assert.equal(L.sameLocalFile(L.newTrack({}), { path: 'a.mp4', name: 'a.mp4', size: 1 }), false);
+
+  const nfd = L.newTrack({ fileName: 'MV/가수 - 노래.mp4'.normalize('NFD'), fileSize: 9 });
+  assert.equal(L.sameLocalFile(nfd, { path: 'MV/가수 - 노래.mp4', name: '가수 - 노래.mp4', size: 9 }), true);
+});
+
+test('normalizeTrack: fileSize 정리', () => {
+  assert.equal(L.normalizeTrack({ fileSize: '123456' }).fileSize, 123456);
+  assert.equal(L.normalizeTrack({ fileSize: -1 }).fileSize, null);
+  assert.equal(L.normalizeTrack({ fileSize: 'abc' }).fileSize, null);
+  assert.equal(L.normalizeTrack({}).fileSize, null);
+});
