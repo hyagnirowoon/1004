@@ -1,0 +1,10 @@
+{
+  "name": "mv-playlist-editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "유튜브 채널에 올릴 뮤직비디오 플레이리스트 편집기 (빌드 없는 정적 웹 앱)",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test \"test/*.test.js\""
+  }
+}

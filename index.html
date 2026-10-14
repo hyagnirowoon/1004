@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>뮤비 플레이리스트 편집기</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-main">
+      <input id="pl-title" class="title-input" placeholder="플레이리스트 제목" aria-label="플레이리스트 제목" autocomplete="off">
+      <textarea id="pl-desc" rows="2" placeholder="플레이리스트 설명 (내보내기 때 맨 위에 들어가요)" aria-label="플레이리스트 설명"></textarea>
+    </div>
+    <div class="top-side">
+      <div class="stats" id="stats" aria-live="polite"></div>
+      <div class="actions">
+        <button type="button" id="btn-undo" title="되돌리기 (입력창 밖에서 Ctrl+Z)" disabled>↶ 되돌리기</button>
+        <button type="button" id="btn-import">가져오기</button>
+        <button type="button" id="btn-export" class="primary">내보내기</button>
+        <input type="file" id="file-import" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="list-pane" aria-label="곡 목록">
+      <form id="add-form" class="add-bar">
+        <textarea id="add-input" rows="1" placeholder="유튜브 링크·영상 ID 붙여넣기 (여러 줄 가능)" aria-label="유튜브 링크"></textarea>
+        <button type="submit" class="primary">추가</button>
+        <button type="button" id="btn-add-blank" title="아직 업로드 전인 곡을 미리 자리만 잡아둬요">+ 업로드 예정 곡</button>
+      </form>
+
+      <div class="filters">
+        <input id="q" type="search" placeholder="제목·아티스트 검색" aria-label="검색">
+        <select id="status-filter" aria-label="상태 필터">
+          <option value="">모든 상태</option>
+          <option value="planned">기획</option>
+          <option value="production">제작 중</option>
+          <option value="ready">업로드 준비</option>
+          <option value="uploaded">업로드 완료</option>
+        </select>
+      </div>
+
+      <ol id="track-list" class="track-list"></ol>
+      <p id="empty" class="empty" hidden></p>
+    </section>
+
+    <aside class="editor-pane" aria-label="곡 편집">
+      <p id="editor-empty" class="empty">왼쪽에서 곡을 고르면 여기서 자세히 편집할 수 있어요.</p>
+      <form id="editor-form" hidden autocomplete="off">
+        <div id="preview" class="preview"></div>
+
+        <label>제목
+          <input name="title" placeholder="곡 제목">
+        </label>
+        <label>아티스트
+          <input name="artist" placeholder="가수 / 팀 이름">
+        </label>
+        <label>유튜브 링크
+          <input name="url" placeholder="https://youtu.be/… (업로드 전이면 비워두세요)" inputmode="url">
+        </label>
+        <div class="grid2">
+          <label>길이
+            <input name="duration" placeholder="3:45" inputmode="numeric" aria-describedby="dur-hint">
+          </label>
+          <label>상태
+            <select name="status">
+              <option value="planned">기획</option>
+              <option value="production">제작 중</option>
+              <option value="ready">업로드 준비</option>
+              <option value="uploaded">업로드 완료</option>
+            </select>
+          </label>
+        </div>
+        <p id="dur-hint" class="hint">길이는 <code>3:45</code>, <code>1:02:03</code>, 또는 초 단위 숫자로 입력해요. 타임스탬프 계산에 쓰여요.</p>
+        <label>공개 예정일
+          <input name="publishAt" type="date">
+        </label>
+        <label>메모
+          <textarea name="note" rows="3" placeholder="콘셉트, 촬영 메모, 체크할 것 …"></textarea>
+        </label>
+
+        <div class="editor-actions">
+          <button type="button" id="btn-fetch">유튜브에서 제목 불러오기</button>
+          <a id="link-open" class="button" target="_blank" rel="noopener noreferrer" hidden>유튜브에서 열기 ↗</a>
+          <button type="button" id="btn-dup">복제</button>
+          <button type="button" id="btn-del" class="danger">삭제</button>
+        </div>
+      </form>
+    </aside>
+  </main>
+
+  <dialog id="export-dialog" aria-labelledby="export-heading">
+    <form method="dialog" class="dlg">
+      <h2 id="export-heading">내보내기</h2>
+      <label>형식
+        <select id="export-format">
+          <option value="chapters">챕터 타임스탬프 설명문 (모음 영상용)</option>
+          <option value="tracklist">트랙리스트 + 링크 (개별 영상 플레이리스트용)</option>
+          <option value="json">JSON (백업 / 다시 가져오기)</option>
+          <option value="csv">CSV (엑셀·구글 시트)</option>
+        </select>
+      </label>
+      <ul id="export-warnings" class="warnings"></ul>
+      <textarea id="export-text" rows="14" readonly aria-label="내보내기 미리보기"></textarea>
+      <div class="dlg-actions">
+        <button type="button" id="btn-copy" class="primary">복사</button>
+        <button type="button" id="btn-download">파일로 저장</button>
+        <button value="close">닫기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="lib.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
